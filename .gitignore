@@ -57,7 +57,7 @@ docs/_build/
 target/
 
 # DotEnv configuration
-env.py
+app/utils/data_files/env.py
 
 # Database
 *.db

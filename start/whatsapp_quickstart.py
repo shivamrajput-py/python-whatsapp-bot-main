@@ -1,6 +1,5 @@
 import json
-from env import *
-import os
+from app.utils.data_files.env import *
 import requests
 import aiohttp
 import asyncio
@@ -9,7 +8,6 @@ import asyncio
 # Load environment variables
 # --------------------------------------------------------------
 
-load_dotenv()
 ACCESS_TOKEN = ACCESS_TOKEN
 RECIPIENT_WAID = RECIPIENT_WAID
 PHONE_NUMBER_ID = PHONE_NUMBER_ID

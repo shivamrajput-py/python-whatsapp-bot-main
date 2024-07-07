@@ -1,4 +1,4 @@
-greeting_all = [
+GREETINGS_AND_CONVO_DATA = [
     ["hello", "Hello! How can I assist you today?"],
     ["hi", "Hi there! What can I do for you?"],
     ["hey", "Hey! How can I help you?"],
@@ -115,11 +115,38 @@ greeting_all = [
 ]
 
 
-abuses_negativity = [
+ABUSES_AND_NEGATIVITY = [
     "madarchod", "chutiya", "chutiye" ,"kutte", "kutta", "gandiye", "kamina", "behanchod", "fuck you", "chut", "bencho", "bhosdike", "bsdk", "bhenchod", "bitch", "bich",
     "nigga", "bkl", "motherfucker", "sisterfucker", "cunt", "vagina", "pussy", "asshole", "kamine", "pencho", "behancho", "rand", "r word", "bhen ke lode", "lode"
 ]
 
-humour = [
+HUMOUR_DATA = [
     ""
 ]
+
+BOTNAME = 'DTU EduBot'
+
+BOTUSERNAME = ''
+
+HELP_TEXT = f"""
+    Hello, 
+THIS IS DTU EduBot, And Here is the command list, commands which you can use to make the fulluse of this bot.
+
+/hello -For Greeting, Knowing the bot
+/help -This Command which brought you up here
+/bot_update - To get latest updates from the bot
+/pyq SUBJECT_CODE - get access to PYQ of that subject.
+/available_pyq - Get List of all available PYQ
+/notes SUBJECT_CODE -get access to All notes related to a subject.
+/available_notes - Get List of all available NOTES
+/dtu_events - Latest info about Upcoming events in DTU.
+/dtu_notices - latest Notices from DTU official website.
+/assignments [SUBJECT_CODE] - to access Assignments of that subject.
+/books [SUBJECT_CODE] - to access books of that subject.
+/playlists [SUBJECT_CODE] - to access course playlists of that subject.
+/available_assignment - Get List of all available ASSIGNMENTS
+/available_playlist - Get List of all available COURSE PLAYLISTS
+/available_books - Get List of all available BOOKS
+
+THIS IS ALL WE GOT FOR NOW! WE ARE ADDING MORE FUNCTIONALITIES, IT WILL TAKE TIME AND YOUR SUPPORT.\nThank You.
+    """

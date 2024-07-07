@@ -2,35 +2,78 @@ import logging
 from flask import current_app, jsonify
 import json
 import requests
-from data import greeting_all,abuses_negativity
+from app.utils.data_files.data import *
 import re
 
-# MAIN CODE ---------------------------------------------------------------------------------------------------------
+#------------------------------ !!!! IMPORTANT FUNCTION !!!! NO NEED TO CHANGE ANYTHING HERE -------------------------------------------------------
 
-BOTNAME = 'DTU Help'
-BOTUSERNAME = ''
-help_text = f"""
-    Hello, 
-THIS IS {BOTNAME}, And Here is the command list, commands which you can use to make the fulluse of this bot.
 
-/hello -For Greeting, Knowing the bot
-/help -This Command which brought you up here
-/bot_update - To get latest updates from the bot
-/pyq SUBJECT_CODE - get access to PYQ of that subject.
-/available_pyq - Get List of all available PYQ
-/notes SUBJECT_CODE -get access to All notes related to a subject.
-/available_notes - Get List of all available NOTES
-/dtu_events - Latest info about Upcoming events in DTU.
-/dtu_notices - latest Notices from DTU official website.
-/assignments [SUBJECT_CODE] - to access Assignments of that subject.
-/books [SUBJECT_CODE] - to access books of that subject.
-/playlists [SUBJECT_CODE] - to access course playlists of that subject.
-/available_assignment - Get List of all available ASSIGNMENTS
-/available_playlist - Get List of all available COURSE PLAYLISTS
-/available_books - Get List of all available BOOKS
+def process_text_for_whatsapp(text):
+    pattern = r"\【.*?\】" # Remove brackets
+    text = re.sub(pattern, "", text).strip() # Substitute the pattern with an empty string
+    pattern = r"\*\*(.*?)\*\*"  # Pattern to find double asterisks including the word(s) in between
+    replacement = r"*\1*" # Replacement pattern with single asterisks
+    whatsapp_style_text = re.sub(pattern, replacement, text) # Substitute occurrences of the pattern with the replacement
 
-THIS IS ALL WE GOT FOR NOW! WE ARE ADDING MORE FUNCTIONALITIES, IT WILL TAKE TIME AND YOUR SUPPORT.\nThank You.
+    return whatsapp_style_text
+
+def log_http_response(response):
+    logging.info(f"Status: {response.status_code}")
+    logging.info(f"Content-type: {response.headers.get('content-type')}")
+    logging.info(f"Body: {response.text}")
+
+def send_message(data):
+    headers = {
+        "Content-type": "application/json",
+        "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
+    }
+
+    url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
+
+    try:
+        response = requests.post(
+            url,
+            data=data,
+            headers=headers,
+            timeout=10 # 10 seconds timeout as an example
+        )
+
+        # Raises an HTTPError if the HTTP request returned an unsuccessful status code
+        response.raise_for_status()
+
+    except requests.Timeout:
+        logging.error("Timeout occurred while sending message")
+        return jsonify({"status": "error", "message": "Request timed out"}), 408
+
+    except (requests.RequestException) as e:  # This will catch any general request exception
+        logging.error(f"Request failed due to: {e}")
+        return jsonify({"status": "error", "message": "Failed to send message"}), 500
+
+    else:
+        # Process the response as normal
+        log_http_response(response)
+        return response
+
+
+def is_valid_whatsapp_message(body):
     """
+    Check if the incoming webhook event has a valid WhatsApp message structure.
+    """
+    return (
+        body.get("object")
+        and body.get("entry")
+        and body["entry"][0].get("changes")
+        and body["entry"][0]["changes"][0].get("value")
+        and body["entry"][0]["changes"][0]["value"].get("messages")
+        and body["entry"][0]["changes"][0]["value"]["messages"][0]
+    )
+
+#------------------------------ !!!! IMPORTANT FUNCTION !!!! NO NEED TO CHANGE ANYTHING HERE -------------------------------------------------------
+
+
+
+#--------------------------------- !!! MAIN CODE, THIS IS WHERE WE HAVE TO WORK AND CHANGE !!! -------------------------------------------------------
+
 
 def find(SUBC: str, TYPE: str ) -> dict:
     # TODO: FINDING MORE SUBJECT CODE GROUPS AND ADDING THEM INTO THIS
@@ -40,7 +83,7 @@ def find(SUBC: str, TYPE: str ) -> dict:
         if SUBC in sub_grp:
             SUBC = sub_grp
 
-    with open(r'Data.json', 'r') as fl:
+    with open(r'./app/utils/data_files/Data.json', 'r') as fl:
         doc = json.load(fl)
 
     if SUBC in doc[0][TYPE].keys():
@@ -51,59 +94,7 @@ def find(SUBC: str, TYPE: str ) -> dict:
 def generate_response(response):
     response: str = response.lower()
 
-    if '/available_pyq' in response:
-        with open(r'Data.json', 'r') as fl:
-            doc = json.load(fl)
-        result_str: str = ''
-        for subcode in doc[0]['PYQ'].keys():
-
-            midsems, endsems = [], []
-            table_arr: list = [midsems, endsems]
-
-            # SEPARATING MIDSEM AND ENDSEM NAMES ON DIFFERENT LIST
-            for pyq_ in doc[0]['PYQ'][subcode].keys():
-                if (doc[0]['PYQ'][subcode][pyq_] != "" and 'MID' in pyq_):
-                    midsems.append(pyq_)
-                elif doc[0]['PYQ'][subcode][pyq_] != "" and 'END' in pyq_:
-                    endsems.append(pyq_)
-                elif doc[0]['PYQ'][subcode][pyq_] != "":
-                    midsems.append(pyq_)
-
-            len_mid = len(midsems)
-            len_end = len(endsems)
-
-            if len_mid + len_end != 0:
-
-                result_str += f'\n\nFOR SUBJECT: {subcode} I HAVE PYQS OF\n'
-
-                # CHECKING WHICH LIST IS SMALLER SO THAT WE HAVE TO FILL EMPTY ELEMENTS OF IT.
-                if len_mid >= len_end:
-                    lenn = [len_mid, 'e']
-                else:
-                    lenn = [len_end, 'm']
-
-                j = 1
-                for i in range(0, lenn[0]):
-
-                    if ((lenn[1] == 'e') and ((i + 1) > len_end)):
-                        result_str += f'\n        {table_arr[0][i]}        |        {len(table_arr[1][i - j]) * '_'}        '
-                        j += 1
-
-                    elif ((lenn[1] == 'm') and ((i + 1) > len_mid)):
-                        result_str += f'\n        {len(table_arr[0][i - j]) * '_'}        |        {table_arr[1][i]}        '
-                        j += 1
-
-                    else:
-                        result_str += f'\n        {table_arr[0][i]}        |        {table_arr[1][i]}        '
-
-                # return (f'{result_str}')
-            else:
-                pass
-
-        return result_str
-        # return (f'Adding more subjects... GIVE US TIME, still on development phase')
-
-    elif '/pyq' in response:
+    if '/pyq' in response:
         SUBC: str = response.replace('/pyq', '').replace(' ', '')
         if len(SUBC)<2: return "You haven't given the subject code in command!\nPlease Write the command like\n\n/pyq SUBJECT_CODE\n\nexample /pyq AM101\nin this way i will be able to provide you every available PYQ of AM101"
         else:
@@ -114,13 +105,9 @@ def generate_response(response):
                 req_str: str= ''
                 for name in req_doc.keys():
                     if (req_doc[name]!=''):
-                        data = get_button_link_message_input(current_app.config["RECIPIENT_WAID"], name, req_doc[name])
-                        send_message(data)
+                        req_str+= f'\n>> *{name}*:\n~{req_doc[name]}\n\n'
 
-
-
-                    # if (req_doc[name]!=''): req_str+= f'\n>> {name} : LINK: {req_doc[name]}\n'
-                # return f"I have found PYQ's of {SUBC} and here it is:\n{req_str}"
+                return f"*I have found PYQ's of {SUBC} and here it is:*\n{req_str}"
 
     elif '/notes' in response:
         SUBC: str = response.replace('/notes', '').strip()
@@ -191,136 +178,91 @@ def generate_response(response):
         return 'Shivam here, its been only 4 days since i started working on this, I am adding resources slowly slowly it will take time, i hope you guys understand, Main code part of bot is done, adding more fun stuff soon...'
 
     elif '/help' in response:
-        return help_text
+        return HELP_TEXT
 
-    for greet in greeting_all:
+    elif 'REP:' in response:
+        return response.replace('REP:', '')
+
+    elif 'test' in response:
+        data = get_button_link_message_data(current_app.config["RECIPIENT_WAID"], "", "")
+        send_message(data)
+        return ""
+
+    for greet in GREETINGS_AND_CONVO_DATA:
         if (greet[0] in response) and not (len(response) > len(greet[0]) + 10):
             return greet[1]
 
-    for badword in abuses_negativity:
+    for badword in ABUSES_AND_NEGATIVITY:
         if badword in response:
             return f"Aap {badword} ☺️, Please do not use abusive language 😌"
 
     return 'Sorry I can not understand what you are trying to say i am still on development phase.'
 
-# --------------------------------------------------------------------------------------------------------------------------
 
-def log_http_response(response):
-    logging.info(f"Status: {response.status_code}")
-    logging.info(f"Content-type: {response.headers.get('content-type')}")
-    logging.info(f"Body: {response.text}")
+# -----------------------------!!!  MESSAGE FORMATTING WHATSAPP JSON DIFFERENT MESSAGE FORMATTING !!!---------------------------------------------------------------------------------------------
 
-
-def get_text_message_input(recipient, text):
+def get_text_message_data(recipient, text, preview_url: bool =False):
     return json.dumps(
         {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": recipient,
             "type": "text",
-            "text": {"preview_url": False, "body": text},
-        })
-
-
-def get_button_link_message_input(recipient, body_text:str, url:str):
-    return json.dumps(
-        # {
-        #     "messaging_product": "whatsapp",
-        #     "preview_url": True,
-        #     "recipient_type": "individual",
-        #     "to": recipient,
-        #     "type": "document",
-        #     "document": {
-        #         "link": url,
-        #         "provider": {
-        #             "name" : body_text
-        #         }
-        #     }
-        # }
-
-        {
-            "messaging_product": "whatsapp",
-            "preview_url": True,
-            "recipient_type": "individual",
-            "to": recipient,
-            "type":"text",
-            "text":{
-                "body": f'{url}'
-            }
-
+            "text": {
+                "preview_url": preview_url,
+                "body": text
+            },
         }
     )
 
+def get_button_link_message_data(recipient, body_text:str, url:str):
+    return json.dumps(
+        {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": recipient,
+            "type": "button",
+            "sub_type": "quick_reply",
+            "index": 0,
+            "parameters":
+                [{
+                    "type": "payload",
+                    "payload": "Yes-Button-Payload"
+                }]
+        }
+    )
 
-def send_message(data):
-    headers = {
-        "Content-type": "application/json",
-        "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
-    }
+def get_document_sharing_data(recipient, doc_link, doc_capt: str = "", provider_name: str = ""):
+    return json.dumps(
+        {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": recipient,
+            "type": "document",
+            "document": {
+                "link": doc_link,
+                "caption": doc_capt,
+                "provider": {
+                    "name": provider_name
+                }
+            }
+        }
+    )
 
-    url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
+#------------------------------------------------------------------------------------------------------------------------
 
-    try:
-        response = requests.post(
-            url, data=data, headers=headers, timeout=10
-        )  # 10 seconds timeout as an example
-        response.raise_for_status()  # Raises an HTTPError if the HTTP request returned an unsuccessful status code
-    except requests.Timeout:
-        logging.error("Timeout occurred while sending message")
-        return jsonify({"status": "error", "message": "Request timed out"}), 408
-    except (
-        requests.RequestException
-    ) as e:  # This will catch any general request exception
-        logging.error(f"Request failed due to: {e}")
-        return jsonify({"status": "error", "message": "Failed to send message"}), 500
-    else:
-        # Process the response as normal
-        log_http_response(response)
-        return response
-
-
-def process_text_for_whatsapp(text):
-    # Remove brackets
-    pattern = r"\【.*?\】"
-    # Substitute the pattern with an empty string
-    text = re.sub(pattern, "", text).strip()
-
-    # Pattern to find double asterisks including the word(s) in between
-    pattern = r"\*\*(.*?)\*\*"
-
-    # Replacement pattern with single asterisks
-    replacement = r"*\1*"
-
-    # Substitute occurrences of the pattern with the replacement
-    whatsapp_style_text = re.sub(pattern, replacement, text)
-
-    return whatsapp_style_text
-
-
+# TODO: THE FUMCTION WHICH RECEIVES THE USER RESPONSE AND GIVES IT TO GENERATE RESPONSE FUNCTION
 def process_whatsapp_message(body):
     wa_id = body["entry"][0]["changes"][0]["value"]["contacts"][0]["wa_id"]
     name = body["entry"][0]["changes"][0]["value"]["contacts"][0]["profile"]["name"]
 
     message = body["entry"][0]["changes"][0]["value"]["messages"][0]
-    message_body = message["text"]["body"]
+    message_body = message["text"]["body"] # Message received from the user
 
-    # TODO: implement custom function here
-    response = generate_response(message_body)
+    response = generate_response(message_body) # GENERATE RESPONSE IS THE FUNCTION WHERE ALL OUR WORK LIES
 
-    data = get_text_message_input(current_app.config["RECIPIENT_WAID"], response)
-    send_message(data)
+    if response!= '':
+        data = get_text_message_data(current_app.config["RECIPIENT_WAID"], response, preview_url=False)
+        send_message(data)
 
-
-def is_valid_whatsapp_message(body):
-    """
-    Check if the incoming webhook event has a valid WhatsApp message structure.
-    """
-    return (
-        body.get("object")
-        and body.get("entry")
-        and body["entry"][0].get("changes")
-        and body["entry"][0]["changes"][0].get("value")
-        and body["entry"][0]["changes"][0]["value"].get("messages")
-        and body["entry"][0]["changes"][0]["value"]["messages"][0]
-    )
-
+#------------------------------------------------------------------------------------------------------------------------
